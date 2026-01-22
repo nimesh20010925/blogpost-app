@@ -153,7 +153,7 @@ export default function Admin() {
                                     </div>
 
                                     {/* Editor area */}
-                                    <div ref={editorRef} className="border p-4 min-h-[200px] rounded mb-4" contentEditable suppressContentEditableWarning placeholder="Type something here..." style={{ outline: 'none' }}>
+                                    <div ref={editorRef} className="border p-4 rounded mb-4" contentEditable suppressContentEditableWarning placeholder="Type something here..." style={{ outline: 'none' }}>
                                     </div>
 
                                     {error && <div className="text-red-600 mb-2">{error}</div>}
