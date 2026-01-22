@@ -4,13 +4,14 @@ const path = require('path');
 
 exports.createPost = async (req, res) => {
     try {
-        const { title, content, author, category, excerpt, publishDate, allowComments } = req.body;
+        const { title, content, author, category, tags, excerpt, publishDate, allowComments } = req.body;
 
         const postData = {
             title,
             content,
             author,
             category,
+            tags,
             excerpt,
             publishDate,
             allowComments,
@@ -101,6 +102,40 @@ exports.likePost = async (req, res) => {
         const post = await Post.findByIdAndUpdate(
             req.params.id,
             { $inc: { likes: 1 } },
+            { new: true }
+        );
+        res.json(post);
+    } catch (err) {
+        res.status(500).json({ msg: err.message });
+    }
+};
+
+
+// Publish post
+exports.publishPost = async (req, res) => {
+    try {
+        const post = await Post.findByIdAndUpdate(
+            req.params.id,
+            {
+                status: 'published',
+                publishDate: new Date()
+            },
+            { new: true }
+        );
+        res.json(post);
+    } catch (err) {
+        res.status(500).json({ msg: err.message });
+    }
+};
+
+// Move post to draft
+exports.draftPost = async (req, res) => {
+    try {
+        const post = await Post.findByIdAndUpdate(
+            req.params.id,
+            {
+                status: 'draft'
+            },
             { new: true }
         );
         res.json(post);

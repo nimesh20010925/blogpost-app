@@ -12,4 +12,6 @@ router.get('/', controller.getPosts);
 router.get('/all', controller.getAllPosts);
 router.get('/:id', controller.getPost);
 
+router.patch('/:id/publish', auth, controller.publishPost);
+router.patch('/:id/draft', auth, controller.draftPost);
 module.exports = router;
