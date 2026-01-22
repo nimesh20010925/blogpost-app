@@ -533,7 +533,7 @@ export default function Admin() {
                                     Add New
                                 </button>
                             </div>
-                            <div className="border rounded p-2 min-h-[42px]">
+                            <div className="border rounded p-2">
                                 <div className="flex flex-wrap gap-2 mb-2">
                                     {selectedTags.map(tagId => {
                                         const tag = tags.find(t => t._id === tagId);
@@ -644,7 +644,7 @@ export default function Admin() {
                             <div 
                                 ref={editorRef}
                                 contentEditable 
-                                className="min-h-[200px] p-4 outline-none text-gray-800"
+                                className="p-4 outline-none text-gray-800"
                                 onInput={handleEditorInput}
                                 onFocus={(e) => { 
                                     if(e.target.innerText === 'Type something') {
@@ -781,7 +781,7 @@ export default function Admin() {
                                 <tr key={post._id} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center">
-                                            <div className="flex-shrink-0 h-10 w-10">
+                                            <div className="h-10 w-10">
                                                 {post.image ? (
                                                     <img 
                                                         className="h-10 w-10 rounded object-cover" 
