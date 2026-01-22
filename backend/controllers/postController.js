@@ -1,8 +1,32 @@
 const Post = require('../models/Post');
+const fs = require('fs');
+const path = require('path');
 
 exports.createPost = async (req, res) => {
-    const post = await Post.create(req.body);
-    res.json(post);
+    try {
+        const { title, content, author, category, excerpt, publishDate, allowComments } = req.body;
+
+        const postData = {
+            title,
+            content,
+            author,
+            category,
+            excerpt,
+            publishDate,
+            allowComments,
+            status: 'draft'
+        };
+
+        // If file was uploaded, save the filename
+        if (req.file) {
+            postData.image = req.file.filename;
+        }
+
+        const post = await Post.create(postData);
+        res.json(post);
+    } catch (err) {
+        res.status(500).json({ msg: err.message });
+    }
 };
 
 exports.getPosts = async (req, res) => {
@@ -21,11 +45,66 @@ exports.getPost = async (req, res) => {
 };
 
 exports.updatePost = async (req, res) => {
-    const post = await Post.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(post);
+    try {
+        const { title, content, author, category, excerpt, publishDate, allowComments, status } = req.body;
+
+        const updateData = {
+            title,
+            content,
+            author,
+            category,
+            excerpt,
+            publishDate,
+            allowComments,
+            status
+        };
+
+        // If new file was uploaded, delete old image and save new filename
+        if (req.file) {
+            const post = await Post.findById(req.params.id);
+            if (post && post.image) {
+                const oldImagePath = path.join(__dirname, '../uploads', post.image);
+                if (fs.existsSync(oldImagePath)) {
+                    fs.unlinkSync(oldImagePath);
+                }
+            }
+            updateData.image = req.file.filename;
+        }
+
+        const post = await Post.findByIdAndUpdate(req.params.id, updateData, { new: true });
+        res.json(post);
+    } catch (err) {
+        res.status(500).json({ msg: err.message });
+    }
 };
 
 exports.deletePost = async (req, res) => {
-    await Post.findByIdAndDelete(req.params.id);
-    res.json({ msg: 'Post deleted' });
+    try {
+        const post = await Post.findByIdAndDelete(req.params.id);
+
+        // Delete associated image file
+        if (post && post.image) {
+            const imagePath = path.join(__dirname, '../uploads', post.image);
+            if (fs.existsSync(imagePath)) {
+                fs.unlinkSync(imagePath);
+            }
+        }
+
+        res.json({ msg: 'Post deleted' });
+    } catch (err) {
+        res.status(500).json({ msg: err.message });
+    }
+};
+
+exports.likePost = async (req, res) => {
+    try {
+        const post = await Post.findByIdAndUpdate(
+            req.params.id,
+            { $inc: { likes: 1 } },
+            { new: true }
+        );
+        res.json(post);
+    } catch (err) {
+        res.status(500).json({ msg: err.message });
+    }
 };

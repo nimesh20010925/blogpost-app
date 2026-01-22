@@ -52,15 +52,24 @@ export default function Admin() {
         const content = editorRef.current?.innerHTML || '';
 
         try {
-            // Build payload
-            const payload = { title, author, category: moderator, excerpt: '', content, publishDate, allowComments };
+            // Build FormData to send file and other fields
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('author', author);
+            formData.append('category', moderator);
+            formData.append('excerpt', '');
+            formData.append('content', content);
+            formData.append('publishDate', publishDate);
+            formData.append('allowComments', allowComments);
 
-            // If image selected, upload as base64 (backend must accept 'image' field) - fallback to null
+            // If image selected, append file
             if (imageFile) {
-                payload.image = imagePreview; // simple approach: send data URL
+                formData.append('image', imageFile);
             }
 
-            await api.post('/posts', payload);
+            await api.post('/posts', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
             // reset form
             setTitle('');
             setImageFile(null);
