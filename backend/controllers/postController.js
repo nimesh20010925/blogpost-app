@@ -118,12 +118,14 @@ exports.publishPost = async (req, res) => {
             req.params.id,
             {
                 status: 'published',
-                publishDate: new Date()
+                publishDate: new Date() // 自动设置发布日期为当前时间
             },
             { new: true }
-        );
+        ).populate('category').populate('tags');
+        
         res.json(post);
     } catch (err) {
+        console.error('Error publishing post:', err);
         res.status(500).json({ msg: err.message });
     }
 };
@@ -137,9 +139,11 @@ exports.draftPost = async (req, res) => {
                 status: 'draft'
             },
             { new: true }
-        );
+        ).populate('category').populate('tags');
+        
         res.json(post);
     } catch (err) {
+        console.error('Error moving post to draft:', err);
         res.status(500).json({ msg: err.message });
     }
 };

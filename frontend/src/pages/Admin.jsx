@@ -27,7 +27,10 @@ import {
   Save,
   ChevronDown,
   Hash,
-  Grid
+  Grid,
+  Globe,
+  Lock,
+  ArrowLeft
 } from 'lucide-react';
 
 export default function Admin() {
@@ -53,7 +56,9 @@ export default function Admin() {
     const [newTag, setNewTag] = useState('');
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [showTagModal, setShowTagModal] = useState(false);
-    const [activeTab, setActiveTab] = useState('posts'); // 'posts', 'categories', 'tags'
+    const [activeTab, setActiveTab] = useState('posts');
+    const [selectedPost, setSelectedPost] = useState(null);
+    const [showPostDetail, setShowPostDetail] = useState(false);
     
     const editorRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -94,6 +99,24 @@ export default function Admin() {
         } catch (err) {
             console.error('Error fetching tags:', err);
         }
+    };
+
+    // View post details
+    const handleViewPost = async (postId) => {
+        try {
+            const response = await api.get(`/posts/${postId}`);
+            setSelectedPost(response.data);
+            setShowPostDetail(true);
+        } catch (err) {
+            console.error('Error fetching post details:', err);
+            setError('Failed to load post details');
+        }
+    };
+
+    // Return to posts list
+    const handleBackToList = () => {
+        setShowPostDetail(false);
+        setSelectedPost(null);
     };
 
     const handleSubmit = async (e) => {
@@ -170,11 +193,68 @@ export default function Admin() {
 
         try {
             await api.delete(`/posts/${postId}`);
-            fetchPosts(); // Refresh the posts list
+            fetchPosts();
             alert('Post deleted successfully!');
         } catch (err) {
             console.error('Error deleting post:', err);
             setError('Failed to delete post');
+        }
+    };
+
+    const handleToggleStatus = async (postId, currentStatus) => {
+        try {
+            const newStatus = currentStatus === 'draft' ? 'published' : 'draft';
+            
+            if (newStatus === 'published') {
+                const response = await api.patch(`/posts/${postId}/publish`);
+                
+                setPosts(posts.map(post => 
+                    post._id === postId ? { ...post, status: 'published', publishDate: new Date() } : post
+                ));
+                
+                // Update details if viewing this post
+                if (selectedPost && selectedPost._id === postId) {
+                    setSelectedPost({...selectedPost, status: 'published', publishDate: new Date()});
+                }
+                
+                alert('Post published successfully!');
+            } else {
+                const response = await api.patch(`/posts/${postId}/draft`);
+                
+                setPosts(posts.map(post => 
+                    post._id === postId ? { ...post, status: 'draft' } : post
+                ));
+                
+                // Update details if viewing this post
+                if (selectedPost && selectedPost._id === postId) {
+                    setSelectedPost({...selectedPost, status: 'draft'});
+                }
+                
+                alert('Post moved to draft!');
+            }
+        } catch (err) {
+            console.error('Error toggling post status:', err);
+            setError('Failed to update post status');
+        }
+    };
+
+    const handleQuickPublish = async (postId) => {
+        try {
+            const response = await api.patch(`/posts/${postId}/publish`);
+            
+            setPosts(posts.map(post => 
+                post._id === postId ? { ...post, status: 'published', publishDate: new Date() } : post
+            ));
+            
+            // Update details if viewing this post
+            if (selectedPost && selectedPost._id === postId) {
+                setSelectedPost({...selectedPost, status: 'published', publishDate: new Date()});
+            }
+            
+            alert('Post published successfully!');
+        } catch (err) {
+            console.error('Error publishing post:', err);
+            setError('Failed to publish post');
         }
     };
 
@@ -261,19 +341,28 @@ export default function Admin() {
         });
     };
 
+    const formatDateTime = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
     const triggerFileInput = () => fileInputRef.current.click();
 
     function handleImageChange(e) {
         const f = e.target.files?.[0];
         if (!f) return;
         
-        // Validate file type
         if (!f.type.startsWith('image/')) {
             setError('Please select an image file');
             return;
         }
         
-        // Validate file size (max 5MB)
         if (f.size > 5 * 1024 * 1024) {
             setError('Image size should be less than 5MB');
             return;
@@ -325,8 +414,163 @@ export default function Admin() {
         return text.substring(0, maxLength) + '...';
     };
 
+    // Render post detail view
+    const renderPostDetail = () => {
+        if (!selectedPost) return null;
+
+        const imageUrl = selectedPost.image
+            ? `http://localhost:5001/uploads/${selectedPost.image}`
+            : null;
+
+        return (
+            <div className="bg-white rounded-lg shadow-sm p-6">
+                {/* Back button and title */}
+                <div className="flex items-center justify-between mb-6">
+                    <button
+                        onClick={handleBackToList}
+                        className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+                    >
+                        <ArrowLeft size={20} />
+                        Back to Posts
+                    </button>
+                    <div className="flex items-center gap-4">
+                        <span className={`px-3 py-1 text-sm font-semibold rounded-full ${selectedPost.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                            {selectedPost.status === 'published' ? 'Published' : 'Draft'}
+                        </span>
+                        <button
+                            onClick={() => handleToggleStatus(selectedPost._id, selectedPost.status)}
+                            className={`px-4 py-2 rounded text-sm ${selectedPost.status === 'published' ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' : 'bg-green-100 text-green-800 hover:bg-green-200'}`}
+                        >
+                            {selectedPost.status === 'published' ? 'Move to Draft' : 'Publish Now'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Post header information */}
+                <div className="mb-8 border-b pb-6">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-4">{selectedPost.title}</h1>
+                    
+                    <div className="flex flex-wrap gap-4 text-gray-600 mb-4">
+                        <div className="flex items-center gap-2">
+                            <User size={16} />
+                            <span>Author: {selectedPost.author}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Calendar size={16} />
+                            <span>Published: {formatDateTime(selectedPost.publishDate)}</span>
+                        </div>
+                        {selectedPost.category && (
+                            <div className="flex items-center gap-2">
+                                <Grid size={16} />
+                                <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm">
+                                    Category: {typeof selectedPost.category === 'object' ? selectedPost.category.name : selectedPost.category}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Tags */}
+                    {selectedPost.tags && selectedPost.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {selectedPost.tags.map((tag, index) => (
+                                <span key={index} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm">
+                                    <Hash size={12} />
+                                    {typeof tag === 'object' ? tag.name : tag}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Post image */}
+                {imageUrl && (
+                    <div className="mb-8">
+                        <div className="relative w-full h-[400px] rounded-lg overflow-hidden">
+                            <img
+                                src={imageUrl}
+                                alt={selectedPost.title}
+                                className="w-full h-full object-cover"
+                            />
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-4">
+                                <p className="text-white text-sm">Featured Image</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Post content */}
+                <div className="mb-8">
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Content</h2>
+                    <div 
+                        className="prose max-w-none border rounded-lg p-6 bg-gray-50"
+                        dangerouslySetInnerHTML={{ __html: selectedPost.content }}
+                    />
+                </div>
+
+                {/* Post metadata */}
+                <div className="border-t pt-6">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-800">Post Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="bg-gray-50 p-4 rounded">
+                            <p className="text-sm text-gray-500">Status</p>
+                            <p className="font-medium">{selectedPost.status}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded">
+                            <p className="text-sm text-gray-500">Comments</p>
+                            <p className="font-medium">{selectedPost.allowComments ? 'Enabled' : 'Disabled'}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded">
+                            <p className="text-sm text-gray-500">Likes</p>
+                            <p className="font-medium">{selectedPost.likes || 0}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded">
+                            <p className="text-sm text-gray-500">Created</p>
+                            <p className="font-medium">{formatDateTime(selectedPost.createdAt)}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded">
+                            <p className="text-sm text-gray-500">Last Updated</p>
+                            <p className="font-medium">{formatDateTime(selectedPost.updatedAt)}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded">
+                            <p className="text-sm text-gray-500">ID</p>
+                            <p className="font-medium text-xs truncate">{selectedPost._id}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="mt-8 flex gap-4">
+                    <button
+                        onClick={() => {/* Add edit functionality here */}}
+                        className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+                    >
+                        <Edit size={18} />
+                        Edit Post
+                    </button>
+                    <button
+                        onClick={() => handleDeletePost(selectedPost._id)}
+                        className="flex items-center gap-2 bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700"
+                    >
+                        <Trash2 size={18} />
+                        Delete Post
+                    </button>
+                    <button
+                        onClick={handleBackToList}
+                        className="flex items-center gap-2 border border-gray-300 text-gray-700 px-6 py-2 rounded hover:bg-gray-50"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
     // Render Content based on active tab
     const renderContent = () => {
+        if (showPostDetail && selectedPost) {
+            return renderPostDetail();
+        }
+        
         switch (activeTab) {
             case 'categories':
                 return renderCategoriesTab();
@@ -720,212 +964,252 @@ export default function Admin() {
         </div>
     );
 
-    const renderPostsTable = () => (
-        <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">All Blog Posts</h2>
-                <button 
-                    onClick={() => setShowForm(true)}
-                    className="bg-[#3b608a] text-white px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide hover:bg-[#2d4a6d] transition-colors"
-                >
-                    <Plus size={16} />
-                    Add New Post
-                </button>
-            </div>
-
-            {loading ? (
+    const renderPostsTable = () => {
+        if (loading) {
+            return (
                 <div className="text-center py-12">
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#3b608a]"></div>
                     <p className="mt-4 text-gray-600">Loading posts...</p>
                 </div>
-            ) : posts.length === 0 ? (
-                <div className="text-center py-12">
-                    <Folder size={64} className="mx-auto text-gray-400 mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No posts yet</h3>
-                    <p className="text-gray-500 mb-6">Get started by creating your first blog post!</p>
+            );
+        }
+
+        return (
+            <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800">All Blog Posts</h2>
                     <button 
                         onClick={() => setShowForm(true)}
-                        className="bg-[#3b608a] text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto hover:bg-[#2d4a6d] transition-colors"
+                        className="bg-[#3b608a] text-white px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide hover:bg-[#2d4a6d] transition-colors"
                     >
-                        <Plus size={20} />
-                        Create Your First Post
+                        <Plus size={16} />
+                        Add New Post
                     </button>
                 </div>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead>
-                            <tr className="bg-gray-50">
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Post
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Category & Tags
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Author
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Publish Date
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Status
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {posts.map((post) => (
-                                <tr key={post._id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center">
-                                            <div className="h-10 w-10">
-                                                {post.image ? (
-                                                    <img 
-                                                        className="h-10 w-10 rounded object-cover" 
-                                                        src={`http://localhost:5000/uploads/${post.image}`} 
-                                                        alt={post.title} 
-                                                    />
-                                                ) : (
-                                                    <div className="h-10 w-10 rounded bg-gray-200 flex items-center justify-center">
-                                                        <ImageIcon size={20} className="text-gray-400" />
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="ml-4">
-                                                <div className="text-sm font-medium text-gray-900">
-                                                    {post.title}
-                                                </div>
-                                                <div className="text-sm text-gray-500">
-                                                    {truncateText(post.content)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="space-y-1">
-                                            {post.category && (
-                                                <span className="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">
-                                                    {post.category.name || post.category}
-                                                </span>
-                                            )}
-                                            <div className="flex flex-wrap gap-1">
-                                                {post.tags && post.tags.map((tag, index) => (
-                                                    <span key={index} className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                                                        {tag.name || tag}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            <User size={16} className="text-gray-400 mr-2" />
-                                            <div className="text-sm text-gray-900">{post.author}</div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            <Calendar size={16} className="text-gray-400 mr-2" />
-                                            <div className="text-sm text-gray-900">{formatDate(post.publishDate)}</div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${post.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                            {post.status === 'published' ? 'Published' : 'Draft'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <div className="flex items-center gap-2">
-                                            <button 
-                                                className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
-                                                title="View Post"
-                                            >
-                                                <Eye size={18} />
-                                            </button>
-                                            <button 
-                                                className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
-                                                title="Edit Post"
-                                            >
-                                                <Edit size={18} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDeletePost(post._id)}
-                                                className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
-                                                title="Delete Post"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </div>
-                                    </td>
+
+                {posts.length === 0 ? (
+                    <div className="text-center py-12">
+                        <Folder size={64} className="mx-auto text-gray-400 mb-4" />
+                        <h3 className="text-xl font-semibold text-gray-700 mb-2">No posts yet</h3>
+                        <p className="text-gray-500 mb-6">Get started by creating your first blog post!</p>
+                        <button 
+                            onClick={() => setShowForm(true)}
+                            className="bg-[#3b608a] text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto hover:bg-[#2d4a6d] transition-colors"
+                        >
+                            <Plus size={20} />
+                            Create Your First Post
+                        </button>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr className="bg-gray-50">
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Post
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Category & Tags
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Author
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Publish Date
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    
-                    {/* Table Summary */}
-                    <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-                        <div className="flex justify-between items-center">
-                            <p className="text-sm text-gray-700">
-                                Showing <span className="font-medium">{posts.length}</span> posts
-                            </p>
-                            <div className="flex items-center gap-2">
-                                <Tag size={16} className="text-gray-400" />
-                                <span className="text-sm text-gray-600">
-                                    {posts.filter(p => p.status === 'published').length} published, 
-                                    {' '}{posts.filter(p => p.status === 'draft').length} drafts
-                                </span>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {posts.map((post) => {
+                                    const imageUrl = post.image 
+                                        ? `http://localhost:5001/uploads/${post.image}`
+                                        : null;
+                                        
+                                    return (
+                                        <tr key={post._id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center">
+                                                    <div className="h-10 w-10 flex-shrink-0">
+                                                        {imageUrl && (
+                                                            <img
+                                                                src={imageUrl}
+                                                                alt={post.title}
+                                                                className="h-10 w-10 object-cover rounded"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div className="ml-4">
+                                                        <div className="text-sm font-medium text-gray-900">
+                                                            {post.title}
+                                                        </div>
+                                                        <div className="text-sm text-gray-500">
+                                                            {truncateText(post.content)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1">
+                                                    {post.category && (
+                                                        <span className="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">
+                                                            {typeof post.category === 'object' ? post.category.name : post.category}
+                                                        </span>
+                                                    )}
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {post.tags && post.tags.map((tag, index) => (
+                                                            <span key={index} className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                                                                {typeof tag === 'object' ? tag.name : tag}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex items-center">
+                                                    <User size={16} className="text-gray-400 mr-2" />
+                                                    <div className="text-sm text-gray-900">{post.author}</div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex items-center">
+                                                    <Calendar size={16} className="text-gray-400 mr-2" />
+                                                    <div className="text-sm text-gray-900">{formatDate(post.publishDate)}</div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${post.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                    {post.status === 'published' ? 'Published' : 'Draft'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <div className="flex items-center gap-2">
+                                                    {/* View details button */}
+                                                    <button 
+                                                        onClick={() => handleViewPost(post._id)}
+                                                        className="text-blue-600 hover:text-blue-900 p-1.5 hover:bg-blue-50 rounded-full"
+                                                        title="View Post Details"
+                                                    >
+                                                        <Eye size={16} />
+                                                    </button>
+                                                    
+                                                    {/* Status toggle button */}
+                                                    <button 
+                                                        onClick={() => handleToggleStatus(post._id, post.status)}
+                                                        className={`p-1.5 rounded-full ${post.status === 'published' ? 'text-yellow-600 hover:bg-yellow-50' : 'text-green-600 hover:bg-green-50'}`}
+                                                        title={post.status === 'published' ? 'Move to Draft' : 'Publish Now'}
+                                                    >
+                                                        {post.status === 'published' ? <Lock size={16} /> : <Globe size={16} />}
+                                                    </button>
+                                                    
+                                                    {/* Quick publish button (only for drafts) */}
+                                                    {post.status === 'draft' && (
+                                                        <button 
+                                                            onClick={() => handleQuickPublish(post._id)}
+                                                            className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-full"
+                                                            title="Quick Publish"
+                                                        >
+                                                            <Check size={16} />
+                                                        </button>
+                                                    )}
+                                                    
+                                                    <button 
+                                                        className="text-green-600 hover:text-green-900 p-1.5 hover:bg-green-50 rounded-full"
+                                                        title="Edit Post"
+                                                    >
+                                                        <Edit size={16} />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleDeletePost(post._id)}
+                                                        className="text-red-600 hover:text-red-900 p-1.5 hover:bg-red-50 rounded-full"
+                                                        title="Delete Post"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                        
+                        {/* Table Summary */}
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                            <div className="flex justify-between items-center">
+                                <p className="text-sm text-gray-700">
+                                    Showing <span className="font-medium">{posts.length}</span> posts
+                                </p>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                                        <span className="text-sm text-gray-600">
+                                            {posts.filter(p => p.status === 'published').length} published
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                        <span className="text-sm text-gray-600">
+                                            {posts.filter(p => p.status === 'draft').length} drafts
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
-    );
+                )}
+            </div>
+        );
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 pb-12">
             <Navbar />
             
             <div className="max-w-7xl mx-auto mt-6 px-4">
-                {/* Navigation Tabs */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                    <button 
-                        onClick={() => {
-                            setActiveTab('posts');
-                            setShowForm(true);
-                        }}
-                        className={`px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide ${activeTab === 'posts' && showForm ? 'bg-[#3b608a] text-white' : 'bg-gray-200 text-gray-700'}`}
-                    >
-                        <Plus size={16} />
-                        Add New Post
-                    </button>
-                    <button 
-                        onClick={() => {
-                            setActiveTab('posts');
-                            setShowForm(false);
-                        }}
-                        className={`px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide ${activeTab === 'posts' && !showForm ? 'bg-[#3b608a] text-white' : 'bg-gray-200 text-gray-700'}`}
-                    >
-                        View All Posts ({posts.length})
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('categories')}
-                        className={`px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide ${activeTab === 'categories' ? 'bg-[#3b608a] text-white' : 'bg-gray-200 text-gray-700'}`}
-                    >
-                        <Grid size={16} />
-                        Categories ({categories.length})
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('tags')}
-                        className={`px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide ${activeTab === 'tags' ? 'bg-[#3b608a] text-white' : 'bg-gray-200 text-gray-700'}`}
-                    >
-                        <Hash size={16} />
-                        Tags ({tags.length})
-                    </button>
-                </div>
+                {/* Navigation Tabs - Only show when not viewing post detail */}
+                {!showPostDetail && (
+                    <div className="flex flex-wrap gap-2 mb-6">
+                        <button 
+                            onClick={() => {
+                                setActiveTab('posts');
+                                setShowForm(true);
+                            }}
+                            className={`px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide ${activeTab === 'posts' && showForm ? 'bg-[#3b608a] text-white' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                            <Plus size={16} />
+                            Add New Post
+                        </button>
+                        <button 
+                            onClick={() => {
+                                setActiveTab('posts');
+                                setShowForm(false);
+                            }}
+                            className={`px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide ${activeTab === 'posts' && !showForm ? 'bg-[#3b608a] text-white' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                            View All Posts ({posts.length})
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('categories')}
+                            className={`px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide ${activeTab === 'categories' ? 'bg-[#3b608a] text-white' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                            <Grid size={16} />
+                            Categories ({categories.length})
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('tags')}
+                            className={`px-4 py-2 rounded flex items-center gap-2 uppercase text-sm font-semibold tracking-wide ${activeTab === 'tags' ? 'bg-[#3b608a] text-white' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                            <Hash size={16} />
+                            Tags ({tags.length})
+                        </button>
+                    </div>
+                )}
 
                 {/* Render Active Content */}
                 {renderContent()}
